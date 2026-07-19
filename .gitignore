@@ -1,1 +1,7 @@
-*.pkl\n*.db\n.ipynb_checkpoints/\n__pycache__/\n.DS_Store
+*.pkl
+*.db
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store
+catboost_info/
+*.log
