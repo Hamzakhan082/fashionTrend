@@ -1,0 +1,1 @@
+*.pkl\n*.db\n.ipynb_checkpoints/\n__pycache__/\n.DS_Store
