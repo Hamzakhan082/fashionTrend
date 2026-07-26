@@ -67,9 +67,13 @@ This project builds a machine learning model to predict next season's best-selli
 
 ## Files
 
+- `fashion_trend_utils.py` - Shared pipeline utilities (loading, preprocessing, feature engineering, splitting, evaluation)
 - `fashion_trend_ml.py` - Full pipeline script
 - `fashion_trend_improved.py` - Hyperparameter tuned version
 - `fashion_trend_analysis.ipynb` - Interactive Jupyter notebook
+
+Data and output directories default to the original Windows paths and can be overridden with the
+`FASHION_TREND_DATA_DIR` and `FASHION_TREND_OUTPUT_DIR` environment variables.
 
 ## Getting Started
 
