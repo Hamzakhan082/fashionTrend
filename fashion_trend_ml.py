@@ -4,6 +4,7 @@ Supervisor: Dr Ollie Bartlett
 """
 
 import os
+import logging
 import numpy as np
 import pandas as pd
 import warnings
@@ -22,8 +23,28 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
+
 BASE = r'C:\Users\hamza\Machine Learning Projects'
 OUTPUT = r'C:\Users\hamza\Machine Learning Projects\Fashion Trend dataset'
+
+
+def load_csv(filename, **kwargs):
+    """Load a dataset CSV, failing with an actionable message instead of a raw traceback."""
+    path = os.path.join(BASE, filename)
+    try:
+        return pd.read_csv(path, **kwargs)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Required data file not found: {path}. "
+            f"Check that BASE ({BASE!r}) points to the dataset directory."
+        ) from exc
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError(f"Data file is empty or has no columns: {path}") from exc
+    except pd.errors.ParserError as exc:
+        raise ValueError(f"Failed to parse data file: {path} ({exc})") from exc
+
 
 # ============================================================
 # 1. DATA LOADING
@@ -32,11 +53,11 @@ print("=" * 60)
 print("LOADING DATA")
 print("=" * 60)
 
-customers = pd.read_csv(os.path.join(BASE, 'customers.csv'), low_memory=False)
-products = pd.read_csv(os.path.join(BASE, 'products.csv'), low_memory=False)
-transactions = pd.read_csv(os.path.join(BASE, 'transactions.csv'), low_memory=False)
-stores = pd.read_csv(os.path.join(BASE, 'stores.csv'), low_memory=False)
-discounts = pd.read_csv(os.path.join(BASE, 'discounts.csv'), low_memory=False)
+customers = load_csv('customers.csv', low_memory=False)
+products = load_csv('products.csv', low_memory=False)
+transactions = load_csv('transactions.csv', low_memory=False)
+stores = load_csv('stores.csv', low_memory=False)
+discounts = load_csv('discounts.csv', low_memory=False)
 
 print(f"Customers: {customers.shape}")
 print(f"Products: {products.shape}")
@@ -238,6 +259,7 @@ models = {
 
 results = {}
 feature_importances = {}
+failed_models = []
 
 for name, model in models.items():
     print(f"\nTraining {name}...")
@@ -255,8 +277,18 @@ for name, model in models.items():
         print(f"  RMSE: {rmse:.2f}")
         print(f"  MAE: {mae:.2f}")
         print(f"  R2: {r2:.4f}")
-    except Exception as e:
-        print(f"  Error: {e}")
+    except Exception:
+        # Log the full traceback so the failure is not silently swallowed,
+        # then continue so the remaining models can still be evaluated.
+        logger.exception("Training failed for model '%s'; skipping it", name)
+        failed_models.append(name)
+
+if not results:
+    raise RuntimeError(
+        "All models failed to train; see the logged tracebacks above for the root cause."
+    )
+if failed_models:
+    logger.warning("Continuing without failed model(s): %s", ", ".join(failed_models))
 
 # ============================================================
 # 7. RESULTS COMPARISON
