@@ -15,8 +15,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-BASE = r'C:\Users\hamza\Machine Learning Projects'
-OUTPUT = r'C:\Users\hamza\Machine Learning Projects\Fashion Trend dataset'
+BASE = os.environ.get('FASHION_DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'))
+OUTPUT = os.environ.get('FASHION_OUTPUT_DIR', os.path.dirname(os.path.abspath(__file__)))
 
 # Load & preprocess
 customers = pd.read_csv(os.path.join(BASE, 'customers.csv'), low_memory=False)
