@@ -36,34 +36,40 @@ This project builds a machine learning model to predict next season's best-selli
 
 ## Results
 
+Full dataset (6.4M transactions), 4262 aggregated season/segment rows, trained on 2023-Winter → 2024 and tested on the following 20% of seasons (2024 → 2025-Spring).
+
 | Model | R2 | RMSE | MAE |
 |-------|------|------|-----|
-| XGBoost | 0.416 | 1414.14 | 205.73 |
-| Random Forest | 0.279 | 1571.88 | 216.42 |
-| CatBoost | 0.221 | 1633.83 | 459.91 |
-| LightGBM | -0.166 | 1999.01 | 245.09 |
+| XGBoost | 0.924 | 1803.18 | 400.58 |
+| Random Forest | 0.894 | 2127.68 | 399.24 |
+| CatBoost | 0.890 | 2168.12 | 613.43 |
+| LightGBM | 0.887 | 2196.78 | 448.12 |
 
-**Best model:** XGBoost (R = 0.42, RMSE = 1414)
+**Best model:** XGBoost (R2 = 0.92, RMSE = 1803)
+
+After grid-search tuning (`fashion_trend_improved.py`), XGBoost reaches CV R2 = 0.942 with
+`learning_rate=0.05, max_depth=6, n_estimators=100` and test R2 = 0.916 — i.e. tuning does not
+beat the default configuration on the held-out future seasons.
 
 ## Key Features
 
 | Feature | Importance | Description |
 |---------|-----------|-------------|
 | `city_count` | 1st | Reach across cities |
-| `total_revenue_roll2` | 2nd | Revenue trend over last 2 seasons |
-| `total_quantity_roll2` | 3rd | Sales momentum |
-| `transaction_count_roll2` | 4th | Transaction frequency trend |
+| `transaction_count_roll2` | 2nd | Transaction frequency trend |
+| `total_revenue_roll2` | 3rd | Revenue trend over last 2 seasons |
+| `total_quantity_roll2` | 4th | Sales momentum |
 | `total_quantity_lag1` | 5th | Last season's sales volume |
 
 ## Next Season's Best-Sellers (Top 5)
 
-| Category | Season | Color | Gender | AgeGroup | Predicted |
-|----------|--------|-------|--------|----------|-----------|
-| Feminine | Spring | WHITE | F | 65+ | 27,604 |
-| Masculine | Spring | Unknown | D | 26-35 | 26,988 |
-| Feminine | Spring | TURQUOISE | F | 26-35 | 24,993 |
-| Feminine | Spring | TURQUOISE | F | 19-25 | 24,978 |
-| Feminine | Winter | TURQUOISE | D | 36-50 | 22,071 |
+| Category | Season | Color | Gender | AgeGroup | Predicted | Actual |
+|----------|--------|-------|--------|----------|-----------|--------|
+| Feminine | Winter | Unknown | F | 36-50 | 67,715 | 75,423 |
+| Feminine | Winter | Unknown | F | 19-25 | 67,151 | 84,760 |
+| Masculine | Winter | Unknown | F | 19-25 | 59,905 | 66,484 |
+| Feminine | Winter | Unknown | F | 26-35 | 59,042 | 67,276 |
+| Masculine | Winter | Unknown | F | 36-50 | 54,815 | 49,587 |
 
 ## Files
 
