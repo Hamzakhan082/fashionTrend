@@ -4,16 +4,11 @@ Supervisor: Dr Ollie Bartlett
 """
 
 import os
-import numpy as np
 import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-from datetime import datetime
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from catboost import CatBoostRegressor
@@ -21,6 +16,21 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+from fashion_trend_utils import (
+    add_customer_features,
+    add_product_features,
+    add_transaction_features,
+    average_feature_importance,
+    best_model_name,
+    create_lag_features,
+    encode_categoricals,
+    evaluate_predictions,
+    rank_models,
+    scale_numeric_features,
+    time_based_split,
+    top_predictions,
+)
 
 BASE = r'C:\Users\hamza\Machine Learning Projects'
 OUTPUT = r'C:\Users\hamza\Machine Learning Projects\Fashion Trend dataset'
@@ -51,27 +61,9 @@ print("\n" + "=" * 60)
 print("PREPROCESSING")
 print("=" * 60)
 
-customers['Age'] = 2024 - pd.to_datetime(customers['Date Of Birth'], errors='coerce').dt.year
-customers['AgeGroup'] = pd.cut(customers['Age'], bins=[0, 18, 25, 35, 50, 65, 120], labels=['0-18', '19-25', '26-35', '36-50', '51-65', '65+'])
-
-products['ProductColor'] = products['Color'].fillna('Unknown')
-products = products.drop(columns=['Color'], errors='ignore')
-products['Sizes'] = products['Sizes'].fillna('Unknown')
-
-transactions['Date'] = pd.to_datetime(transactions['Date'], errors='coerce')
-transactions['Year'] = transactions['Date'].dt.year
-transactions['Month'] = transactions['Date'].dt.month
-transactions['Quarter'] = transactions['Date'].dt.quarter
-transactions['Weekday'] = transactions['Date'].dt.weekday  # 0=Monday
-transactions['IsWeekend'] = transactions['Weekday'].apply(lambda x: 1 if x >= 5 else 0)
-
-def get_season(month):
-    if month in [12, 1, 2]: return 'Winter'
-    elif month in [3, 4, 5]: return 'Spring'
-    elif month in [6, 7, 8]: return 'Summer'
-    else: return 'Fall'
-
-transactions['Season'] = transactions['Month'].apply(get_season)
+customers = add_customer_features(customers)
+products = add_product_features(products)
+transactions = add_transaction_features(transactions)
 
 # Merge transactions with product, customer, store info
 print("Merging datasets...")
@@ -112,27 +104,6 @@ agg_data = agg_data.sort_values(['Category', 'Season', 'Year'])
 # Create lag features: use previous season's data as features
 print("Creating lag features...")
 
-def create_lag_features(df, group_cols, target_col, lag_cols, n_lags=2):
-    """Create lag features for time series prediction."""
-    df = df.sort_values(['Year', 'Season']).reset_index(drop=True)
-
-    # Map season to numeric for ordering
-    season_order = {'Spring': 0, 'Summer': 1, 'Fall': 2, 'Winter': 3}
-    df['SeasonNum'] = df['Season'].map(season_order)
-    df['TimeStep'] = df['Year'] * 4 + df['SeasonNum']
-
-    for col in lag_cols + [target_col]:
-        for lag in range(1, n_lags + 1):
-            df[f'{col}_lag{lag}'] = df.groupby(group_cols, group_keys=False)[col].shift(lag)
-
-    # Rolling averages
-    for col in lag_cols + [target_col]:
-        df[f'{col}_roll2'] = df.groupby(group_cols, group_keys=False)[col].transform(
-            lambda x: x.rolling(window=2, min_periods=1).mean()
-        )
-
-    return df
-
 agg_data = create_lag_features(
     agg_data,
     group_cols=['Category', 'ProductColor', 'Gender', 'AgeGroup'],
@@ -155,12 +126,9 @@ print("ENCODING CATEGORICAL VARIABLES")
 print("=" * 60)
 
 cat_cols = ['Category', 'Season', 'ProductColor', 'Gender', 'AgeGroup']
-le_dict = {}
+agg_data, le_dict = encode_categoricals(agg_data, cat_cols)
 for col in cat_cols:
-    le = LabelEncoder()
-    agg_data[col + '_enc'] = le.fit_transform(agg_data[col])
-    le_dict[col] = le
-    print(f"{col}: {len(le.classes_)} categories")
+    print(f"{col}: {len(le_dict[col].classes_)} categories")
 
 # Features for modeling
 feature_cols = [
@@ -194,10 +162,10 @@ print("=" * 60)
 
 # Sort by time and use last 20% as test
 agg_data_sorted = agg_data.sort_values('TimeStep').reset_index(drop=True)
-split_idx = int(len(agg_data_sorted) * 0.8)
+train_rows, test_rows, split_idx = time_based_split(agg_data, test_size=0.2)
 
-train_idx = agg_data_sorted.index[:split_idx]
-test_idx = agg_data_sorted.index[split_idx:]
+train_idx = train_rows.index
+test_idx = test_rows.index
 
 X_train = X.iloc[train_idx]
 y_train = y[train_idx]
@@ -209,7 +177,6 @@ print(f"Train time range: {agg_data_sorted.iloc[train_idx]['Year'].min()}-{agg_d
 print(f"Test time range: {agg_data_sorted.iloc[test_idx]['Year'].min()}-{agg_data_sorted.iloc[test_idx]['Season'].iloc[-1]} {agg_data_sorted.iloc[test_idx]['Year'].iloc[-1]}")
 
 # Scale numerical features
-scaler = StandardScaler()
 numeric_feats = ['avg_age', 'city_count', 'store_count', 'production_cost', 'avg_unit_price',
                  'total_quantity_lag1', 'total_quantity_lag2', 'total_quantity_roll2',
                  'total_revenue_lag1', 'total_revenue_lag2', 'total_revenue_roll2',
@@ -217,10 +184,7 @@ numeric_feats = ['avg_age', 'city_count', 'store_count', 'production_cost', 'avg
                  'avg_discount_lag1', 'avg_discount_lag2', 'avg_discount_roll2',
                  'transaction_count_lag1', 'transaction_count_lag2', 'transaction_count_roll2']
 
-X_train_scaled = X_train.copy()
-X_test_scaled = X_test.copy()
-X_train_scaled[numeric_feats] = scaler.fit_transform(X_train[numeric_feats])
-X_test_scaled[numeric_feats] = scaler.transform(X_test[numeric_feats])
+X_train_scaled, X_test_scaled, scaler = scale_numeric_features(X_train, X_test, numeric_feats)
 
 # ============================================================
 # 6. MODEL TRAINING
@@ -245,16 +209,13 @@ for name, model in models.items():
         model.fit(X_train_scaled, y_train)
         y_pred = model.predict(X_test_scaled)
 
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
-
-        results[name] = {'RMSE': rmse, 'MAE': mae, 'R2': r2}
+        metrics = evaluate_predictions(y_test, y_pred)
+        results[name] = metrics
         feature_importances[name] = model.feature_importances_
 
-        print(f"  RMSE: {rmse:.2f}")
-        print(f"  MAE: {mae:.2f}")
-        print(f"  R2: {r2:.4f}")
+        print(f"  RMSE: {metrics['RMSE']:.2f}")
+        print(f"  MAE: {metrics['MAE']:.2f}")
+        print(f"  R2: {metrics['R2']:.4f}")
     except Exception as e:
         print(f"  Error: {e}")
 
@@ -269,7 +230,7 @@ results_df = pd.DataFrame(results).T
 print("\n" + results_df.to_string())
 results_df.to_csv(os.path.join(OUTPUT, 'model_comparison.csv'))
 
-best_model = results_df['R2'].idxmax()
+best_model = best_model_name(results)
 print(f"\nBest model by R2: {best_model}")
 
 # ============================================================
@@ -298,13 +259,7 @@ print("Saved: feature_importance.png")
 
 # Aggregate feature importance across models
 print("\nTop features across all models:")
-all_importances = []
-for name, imp in feature_importances.items():
-    for i, f in enumerate(feature_cols):
-        all_importances.append({'Model': name, 'Feature': f, 'Importance': imp[i]})
-
-imp_df = pd.DataFrame(all_importances)
-avg_imp = imp_df.groupby('Feature')['Importance'].mean().sort_values(ascending=False)
+avg_imp = average_feature_importance(feature_importances, feature_cols)
 print(avg_imp.head(15).to_string())
 
 avg_imp.to_csv(os.path.join(OUTPUT, 'feature_importance_avg.csv'))
@@ -412,7 +367,7 @@ next_season_preds['AgeGroup'] = agg_data_sorted.iloc[test_idx]['AgeGroup'].value
 next_season_preds['Year'] = agg_data_sorted.iloc[test_idx]['Year'].values
 
 # Top selling predictions
-top_preds = next_season_preds.nlargest(20, 'predicted_quantity')
+top_preds = top_predictions(next_season_preds, n=20)
 print("\nTop 20 predicted best-sellers for next season:")
 cols_show = ['Category', 'Season', 'ProductColor', 'Gender', 'AgeGroup', 'predicted_quantity', 'actual_quantity']
 print(top_preds[cols_show].to_string())
@@ -439,7 +394,7 @@ RQ2: Which features most influence fashion trends?
 RQ3: Which ML algorithm performs best?
   -> Rankings by R2 (higher is better):
 """)
-for rank, (model_name, metrics) in enumerate(sorted(results.items(), key=lambda x: x[1]['R2'], reverse=True), 1):
+for rank, (model_name, metrics) in enumerate(rank_models(results), 1):
     print(f"    {rank}. {model_name}: R2={metrics['R2']:.4f}, RMSE={metrics['RMSE']:.2f}")
 
 print(f"""

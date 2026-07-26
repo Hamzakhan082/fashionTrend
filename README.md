@@ -69,7 +69,9 @@ This project builds a machine learning model to predict next season's best-selli
 
 - `fashion_trend_ml.py` - Full pipeline script
 - `fashion_trend_improved.py` - Hyperparameter tuned version
+- `fashion_trend_utils.py` - Shared preprocessing, splitting and evaluation helpers
 - `fashion_trend_analysis.ipynb` - Interactive Jupyter notebook
+- `tests/` - Unit tests for `fashion_trend_utils.py`
 
 ## Getting Started
 
@@ -79,6 +81,16 @@ pip install pandas numpy scikit-learn xgboost lightgbm catboost matplotlib seabo
 
 # Run the pipeline
 python fashion_trend_ml.py
+```
+
+## Tests
+
+The reusable pipeline logic lives in `fashion_trend_utils.py` and is covered by unit
+tests that run without the Kaggle dataset (synthetic frames only).
+
+```bash
+pip install -r requirements-dev.txt
+pytest                     # runs tests/ with coverage for fashion_trend_utils.py
 ```
 
 ## Room for Improvement
