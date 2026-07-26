@@ -71,11 +71,25 @@ beat the default configuration on the held-out future seasons.
 | Feminine | Winter | Unknown | F | 26-35 | 59,042 | 67,276 |
 | Masculine | Winter | Unknown | F | 36-50 | 54,815 | 49,587 |
 
+## Forecasting the Next Season
+
+`fashion_trend_forecast.py` trains on every complete observed season and predicts the season
+that follows the data (trailing partially-observed seasons are dropped), rolling each segment's
+latest values into its lag features. A walk-forward check first forecasts the last observed
+season from the seasons before it:
+
+- Winter 2024 forecast vs. actuals: **R2 = 0.954**, RMSE = 1648, MAE = 402 (602 segments)
+- Top-20 predicted best-sellers matched the actual top-20 **20/20**
+
+It then outputs `next_season_forecast.csv` — predicted quantities per segment for the first
+unobserved season (Spring 2025 with the current data).
+
 ## Files
 
 - `fashion_trend_utils.py` - Shared pipeline utilities (loading, preprocessing, feature engineering, splitting, evaluation)
 - `fashion_trend_ml.py` - Full pipeline script
 - `fashion_trend_improved.py` - Hyperparameter tuned version
+- `fashion_trend_forecast.py` - Forecast for the next unobserved season, with a walk-forward accuracy check
 - `fashion_trend_analysis.ipynb` - Interactive Jupyter notebook
 
 Data and output directories default to the original Windows paths and can be overridden with the

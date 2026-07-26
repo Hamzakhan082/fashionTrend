@@ -31,6 +31,7 @@ PIPELINE_COLUMNS = {
 }
 
 SEASON_ORDER = {'Spring': 0, 'Summer': 1, 'Fall': 2, 'Winter': 3}
+SEASON_BY_NUM = {num: name for name, num in SEASON_ORDER.items()}
 SEASON_BY_MONTH = {
     12: 'Winter', 1: 'Winter', 2: 'Winter',
     3: 'Spring', 4: 'Spring', 5: 'Spring',
@@ -180,6 +181,55 @@ def add_lag_features(df, group_cols=GROUP_COLS, target_col=TARGET_COL, lag_cols=
         )
 
     return df.dropna().reset_index(drop=True)
+
+
+def next_season(year, season):
+    """The (year, season) that follows the given one in calendar order."""
+    season_num = SEASON_ORDER[season]
+    next_num = (season_num + 1) % 4
+    next_name = SEASON_BY_NUM[next_num]
+    return (year + 1 if next_num == 0 else year), next_name
+
+
+def build_next_season_features(agg_data, encoders, group_cols=GROUP_COLS, target_col=TARGET_COL,
+                               lag_cols=LAG_COLS, n_lags=2, roll_window=2,
+                               static_cols=('avg_age', 'city_count', 'store_count',
+                                            'production_cost', 'avg_unit_price', 'avg_discount')):
+    """Build one unobserved next-season row per group, ready to be predicted.
+
+    Each group's most recent observed seasons are rolled forward: `lag1` becomes the
+    latest observed value, `lag2` the one before it, and `roll{roll_window}` the mean of
+    the last `roll_window` observations. Static segment attributes are carried forward.
+    Returns a frame with the identity columns, the derived features, and no target.
+    """
+    history = agg_data.sort_values(list(group_cols) + ['TimeStep'])
+    rows = []
+
+    for keys, group in history.groupby(list(group_cols), observed=True):
+        latest = group.iloc[-1]
+        year, season = next_season(int(latest['Year']), latest['Season'])
+        row = dict(zip(group_cols, keys if isinstance(keys, tuple) else (keys,)))
+        row['Year'] = year
+        row['Season'] = season
+        row['SeasonNum'] = SEASON_ORDER[season]
+        row['TimeStep'] = year * 4 + row['SeasonNum']
+
+        for col in list(lag_cols) + [target_col]:
+            values = group[col].to_numpy()
+            for lag in range(1, n_lags + 1):
+                row[f'{col}_lag{lag}'] = values[-lag] if len(values) >= lag else np.nan
+            row[f'{col}_roll{roll_window}'] = values[-roll_window:].mean()
+
+        for col in static_cols:
+            if col in group.columns:
+                row[col] = latest[col]
+
+        rows.append(row)
+
+    future = pd.DataFrame(rows).dropna().reset_index(drop=True)
+    for col, encoder in encoders.items():
+        future[f'{col}_enc'] = encoder.transform(future[col])
+    return future
 
 
 def encode_categoricals(df, cat_cols=CAT_COLS, verbose=False):
