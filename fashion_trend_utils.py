@@ -19,6 +19,17 @@ OUTPUT = os.environ.get(
 
 DATASET_NAMES = ['customers', 'products', 'transactions', 'stores', 'discounts']
 
+# Columns the pipeline actually consumes. Restricting the read keeps the 6.4M-row
+# transaction table (and the merged frame) within a few GB of memory.
+PIPELINE_COLUMNS = {
+    'customers': ['Customer ID', 'Date Of Birth', 'Gender', 'City', 'Country'],
+    'products': ['Product ID', 'Category', 'Sub Category', 'Color', 'Sizes', 'Production Cost'],
+    'transactions': ['Customer ID', 'Product ID', 'Store ID', 'Unit Price', 'Quantity', 'Date',
+                     'Discount', 'Line Total'],
+    'stores': ['Store ID', 'Country', 'City'],
+    'discounts': None,
+}
+
 SEASON_ORDER = {'Spring': 0, 'Summer': 1, 'Fall': 2, 'Winter': 3}
 SEASON_BY_MONTH = {
     12: 'Winter', 1: 'Winter', 2: 'Winter',
@@ -54,11 +65,17 @@ def output_path(filename):
     return os.path.join(OUTPUT, filename)
 
 
-def load_datasets(names=DATASET_NAMES, verbose=True):
-    """Load the raw CSV tables, keyed by dataset name."""
+def load_datasets(names=DATASET_NAMES, verbose=True, columns=PIPELINE_COLUMNS):
+    """Load the raw CSV tables, keyed by dataset name.
+
+    `columns` maps a dataset name to the columns to read (None reads every column);
+    pass `columns={}` to always read full tables.
+    """
     datasets = {}
     for name in names:
-        datasets[name] = pd.read_csv(data_path(f'{name}.csv'), low_memory=False)
+        usecols = (columns or {}).get(name)
+        datasets[name] = pd.read_csv(data_path(f'{name}.csv'), low_memory=False,
+                                     usecols=usecols)
         if verbose:
             print(f"{name.capitalize()}: {datasets[name].shape}")
     return datasets
