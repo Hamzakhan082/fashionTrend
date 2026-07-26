@@ -18,11 +18,28 @@ import seaborn as sns
 BASE = r'C:\Users\hamza\Machine Learning Projects'
 OUTPUT = r'C:\Users\hamza\Machine Learning Projects\Fashion Trend dataset'
 
+
+def load_csv(filename, **kwargs):
+    """Load a dataset CSV, failing with an actionable message instead of a raw traceback."""
+    path = os.path.join(BASE, filename)
+    try:
+        return pd.read_csv(path, **kwargs)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Required data file not found: {path}. "
+            f"Check that BASE ({BASE!r}) points to the dataset directory."
+        ) from exc
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError(f"Data file is empty or has no columns: {path}") from exc
+    except pd.errors.ParserError as exc:
+        raise ValueError(f"Failed to parse data file: {path} ({exc})") from exc
+
+
 # Load & preprocess
-customers = pd.read_csv(os.path.join(BASE, 'customers.csv'), low_memory=False)
-products = pd.read_csv(os.path.join(BASE, 'products.csv'), low_memory=False)
-transactions = pd.read_csv(os.path.join(BASE, 'transactions.csv'), low_memory=False)
-stores = pd.read_csv(os.path.join(BASE, 'stores.csv'), low_memory=False)
+customers = load_csv('customers.csv', low_memory=False)
+products = load_csv('products.csv', low_memory=False)
+transactions = load_csv('transactions.csv', low_memory=False)
+stores = load_csv('stores.csv', low_memory=False)
 
 customers['Age'] = 2024 - pd.to_datetime(customers['Date Of Birth'], errors='coerce').dt.year
 customers['AgeGroup'] = pd.cut(customers['Age'], bins=[0,18,25,35,50,65,120], labels=['0-18','19-25','26-35','36-50','51-65','65+'])
